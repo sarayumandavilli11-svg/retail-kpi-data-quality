@@ -1,0 +1,67 @@
+# TASK 03 - Data Ingestion, Cleaning & Preprocessing with Pandas
+import pandas as pd
+import numpy as np
+
+# IMPLEMENTATION STEP 1: Load raw dataset
+# df = pd.read_csv('retail-orders-raw (1).csv')
+# Demo with your data
+raw = [
+['RT-1001','2026-01-01','Hyderabad','Learning Kit',1,1200,10,'Student','Paid'],
+['RT-1002','03/01/2026','Vizag','Course Access',1,800,0,'Fresher','Paid'],
+['RT-1003','2026-01-05','Hyderabad','Mentor Session',2,1500,'','Student','Pending'],
+['RT-1004','2026-01-06','Warangal','Learning Kit',1,1200,15,'Professional','Paid'],
+['RT-1004','2026-01-06','Warangal','Learning Kit',1,1200,15,'Professional','Paid'],
+['RT-1005','2026-01-08','','Course Access',1,800,5,'Student','Failed'],
+['RT-1006','2026-13-10','Vijayawada','Learning Kit',-1,1200,10,'student','Paid'],
+['RT-1007','2026-01-10','Guntur','Mentor Session',1,1500,105,'Fresher','Paid'],
+['RT-1008','2026-01-12','Hyderabad','Learning Kit','two',1200,0,'Student','Paid'],
+['RT-1009','2026-01-14','Vizag','Course Access',1,800,0,'Professional','Refunded'],
+['RT-1010','2026-01-16','Hyderabad','Learning Kit',1,1200,0,'Professional','paid'],
+['RT-1011','','Warangal','Course Access',1,800,0,'Student','Pending'],
+]
+df = pd.DataFrame(raw, columns=['order_id','order_date','city','product_category','quantity','unit_price','discount_pct','customer_segment','payment_status'])
+
+print("BEFORE - Shape:", df.shape)
+print("Missing:\n", (df == '').sum())
+print("Duplicate order_id:", df.duplicated('order_id').sum())
+
+# IMPLEMENTATION STEP 2: Identify and impute/handle missing, outliers, incorrect types
+df.replace('', pd.NA, inplace=True)
+
+# Incorrect types -> coerce
+df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce')
+df['discount_pct'] = pd.to_numeric(df['discount_pct'], errors='coerce')
+df['order_date'] = pd.to_datetime(df['order_date'], errors='coerce')
+
+# Missing impute
+df['city'].fillna(df['city'].mode()[0], inplace=True) # Hyderabad
+df['discount_pct'].fillna(0, inplace=True)
+df['quantity'].fillna(df['quantity'].median(), inplace=True)
+df['order_date'].fillna(pd.to_datetime('2026-01-07'), inplace=True)
+
+# Outliers & incorrect
+df.loc[df['quantity'] < 0, 'quantity'] = df['quantity'].abs()
+df.loc[df['quantity'] > 10, 'quantity'] = 10
+df.loc[df['discount_pct'] > 100, 'discount_pct'] = 15 # cap
+
+# Inconsistent data - normalize
+df['customer_segment'] = df['customer_segment'].str.lower().map({'student':'Student','fresher':'Fresher','professional':'Professional'})
+df['payment_status'] = df['payment_status'].str.title()
+df = df.drop_duplicates(subset=['order_id'], keep='first')
+
+# IMPLEMENTATION STEP 3: Feature engineering
+df['order_year'] = df['order_date'].dt.year
+df['order_month'] = df['order_date'].dt.month
+df['order_month_name'] = df['order_date'].dt.month_name()
+df['gross_amount'] = df['quantity'] * df['unit_price']
+df['discount_amount'] = df['gross_amount'] * df['discount_pct']/100
+df['net_amount'] = df['gross_amount'] - df['discount_amount']
+df['cost_price'] = df['unit_price'] * 0.6
+df['profit'] = (df['unit_price'] - df['cost_price'])*df['quantity'] - df['discount_amount']
+df['profit_margin_pct'] = (df['profit']/df['net_amount']*100).round(2)
+
+print("AFTER - Shape:", df.shape)
+print(df.head())
+
+# Save clean CSV
+df.to_csv('retail-orders-clean.csv', index=False)
